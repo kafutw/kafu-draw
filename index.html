@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>卡夫抽獎</title>
+<meta name="description" content="貼上留言名單、設定獎項與篩選條件，隨機抽出得獎者，產生可以分享的開獎結果網址。">
+<meta property="og:title" content="卡夫抽獎｜留言抽獎小工具">
+<meta property="og:description" content="貼上留言名單、設定獎項，隨機抽出得獎者，開獎結果可以直接分享。">
+<meta property="og:image" content="https://kafutw.github.io/kafu-draw/og.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><img src="favicon.svg" alt="" width="28" height="28">卡夫抽獎</a>
+</header>
+
+<main id="setup" hidden>
+  <section class="intro">
+    <h1>留言抽獎</h1>
+    <p>把貼文的留言名單貼進來（或上傳 CSV／Excel、Threads 逐字稿），設定獎項和篩選條件，按下開獎就會隨機抽出得獎者。開獎後會產生一個結果網址，可以直接分享到粉專、社團或 Threads，也能下載得獎名單和開獎圖。名單只在你自己的瀏覽器裡處理，不會上傳到任何地方。</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">1</span>活動資訊</h2>
+    <label class="field">活動名稱
+      <input id="title" type="text" maxlength="60" placeholder="例如：十月粉絲回饋抽獎">
+    </label>
+    <label class="field">貼文網址<span class="opt">選填，會顯示在開獎結果頁</span>
+      <input id="postUrl" type="url" placeholder="https://www.facebook.com/…">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">2</span>參加名單</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-src="paste" aria-selected="true">貼上文字</button>
+      <button role="tab" data-src="file" aria-selected="false">上傳 CSV／Excel</button>
+      <button role="tab" data-src="threads" aria-selected="false">Threads 逐字稿</button>
+    </div>
+
+    <div class="pane" data-pane="paste">
+      <p class="hint">一行一則留言。用 Tab 或冒號把帳號和留言隔開，例如「kafu.tw：我想要！@朋友」；沒有冒號就整行當成帳號。從 Google 試算表複製兩欄貼上也可以。</p>
+      <textarea id="pasteBox" rows="9" spellcheck="false" placeholder="小明：我要參加 @阿華 @小美&#10;amy_chen：好想要喔！&#10;Kevin Lin"></textarea>
+    </div>
+
+    <div class="pane" data-pane="file" hidden>
+      <p class="hint">支援 .csv、.xlsx、.xls。上傳之後選好哪一欄是帳號、哪一欄是留言。</p>
+      <label class="drop"><input id="fileInput" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls"><span id="fileLabel">點這裡選檔案，或把檔案拖進來</span></label>
+      <div id="colMap" class="colmap" hidden>
+        <label>帳號<select data-col="user"></select></label>
+        <label>顯示名稱<select data-col="name"></select></label>
+        <label>留言<select data-col="text"></select></label>
+        <label>時間<select data-col="time"></select></label>
+        <label class="check"><input type="checkbox" id="hasHeader" checked>第一列是標題</label>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="threads" hidden>
+      <p class="hint">選 threads-dump 抓下來的 <code>raw.json</code>，會把所有留言和子回覆都算進來，發文者自己的帳號會自動加進排除名單。</p>
+      <label class="drop"><input id="threadsInput" type="file" accept=".json,application/json"><span id="threadsLabel">選擇 raw.json</span></label>
+      <p id="threadsNote" class="warn" hidden></p>
+    </div>
+
+    <div id="summary" class="summary" hidden></div>
+    <details id="previewWrap" class="preview" hidden>
+      <summary>看名單（<span id="previewCount">0</span> 則有效）</summary>
+      <div class="tablewrap"><table id="previewTable"><thead><tr><th>#</th><th>帳號</th><th>留言</th><th>時間</th></tr></thead><tbody></tbody></table></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">3</span>獎項</h2>
+    <div id="prizes"></div>
+    <button id="addPrize" class="ghost" type="button">＋ 增加獎項</button>
+    <label class="field inline">備取名額
+      <input id="backup" type="number" min="0" max="50" value="0">
+      <span class="opt">得獎者沒回覆時遞補用</span>
+    </label>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">4</span>篩選條件</h2>
+    <label class="check"><input type="checkbox" id="fDedupe" checked>排除重複帳號<span class="opt">同一個帳號留言好幾次，只算一次機會</span></label>
+    <label class="check"><input type="checkbox" id="fOnce" checked>每個帳號只能抽中一次</label>
+    <label class="check"><input type="checkbox" id="fEmpty">排除沒有留言內容的</label>
+    <label class="field">排除帳號<span class="opt">一行一個，例如自己的帳號、工作人員</span>
+      <textarea id="fExclude" rows="3" spellcheck="false"></textarea>
+    </label>
+    <label class="field">留言要包含的關鍵字<span class="opt">多個用逗號隔開</span>
+      <input id="fKeywords" type="text" placeholder="例如：想要, +1">
+    </label>
+    <div class="radios" id="kwModeWrap">
+      <label><input type="radio" name="kwMode" value="any" checked>包含任一個就算</label>
+      <label><input type="radio" name="kwMode" value="all">全部都要包含</label>
+    </div>
+    <label class="field inline">至少標記
+      <input id="fTags" type="number" min="0" max="20" value="0">
+      <span class="opt">位朋友（以留言裡的 @ 計算）</span>
+    </label>
+    <label class="field inline">留言截止時間
+      <input id="fDeadline" type="datetime-local">
+      <span class="opt">名單有時間欄才會生效</span>
+    </label>
+  </section>
+
+  <div class="go">
+    <p id="goNote" class="hint"></p>
+    <button id="drawBtn" class="primary" type="button" disabled>立即開獎</button>
+  </div>
+</main>
+
+<main id="drawing" hidden>
+  <div class="stage">
+    <p class="stage-prize" id="stagePrize"></p>
+    <div class="reel" id="reel">準備中…</div>
+    <ol class="stage-list" id="stageList"></ol>
+    <button id="skipBtn" class="ghost" type="button">跳過動畫</button>
+  </div>
+</main>
+
+<main id="result" hidden>
+  <section class="result-head">
+    <p class="kicker">開獎結果</p>
+    <h1 id="rTitle"></h1>
+    <p class="meta" id="rMeta"></p>
+    <p class="meta" id="rPost"></p>
+  </section>
+  <div id="rPrizes"></div>
+  <section class="card small" id="rFilters"></section>
+
+  <div class="actions" id="ownerActions" hidden>
+    <button id="copyUrl" class="primary" type="button">複製開獎結果網址</button>
+    <button id="makeImg" type="button">下載開獎圖</button>
+    <button id="copyPost" type="button">複製貼文文字</button>
+    <button id="dlCsv" type="button">下載得獎名單 CSV</button>
+    <button id="backToSetup" class="ghost" type="button">回到設定</button>
+  </div>
+  <p class="public-foot" id="publicFoot" hidden>這份結果由卡夫抽獎隨機產生。<a href="./">我也要辦抽獎 →</a></p>
+</main>
+
+<div id="imgModal" class="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head"><strong>開獎圖</strong><button id="closeModal" class="ghost" type="button">關閉</button></div>
+    <p class="hint">手機可以長按圖片存起來；電腦點圖片下面的按鈕下載。</p>
+    <div id="imgList" class="imglist"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
